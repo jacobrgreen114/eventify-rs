@@ -1,0 +1,9 @@
+[package]
+name = "eventify"
+version = "0.0.0"
+description = "A utility library for variety of event-based programming patterns."
+edition = "2021"
+authors = [ "Jacob R. Green" ]
+license = "Apache-2.0"
+repository = "https://github.com/jacobrgreen114/eventify-rs"
+readme = "README.md"

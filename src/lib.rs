@@ -14,5 +14,8 @@
 // limitations under the License.
 //
 
+/// Hookable events.
 pub mod event;
+
+/// Properties with changed events.
 pub mod property;

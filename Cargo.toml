@@ -1,6 +1,6 @@
 [package]
 name = "eventify"
-version = "0.0.0"
+version = "0.1.0-alpha.0"
 description = "A utility library for variety of event-based programming patterns."
 authors = [ "Jacob R. Green" ]
 license = "Apache-2.0"

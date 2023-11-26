@@ -1,7 +1,7 @@
 # eventify
-Eventify is a library to facilitate the creation of event-based design patterns in your applications.
+A utility library for variety of event-based programming patterns.
 
-*** Eventify is still in early development, and is not yet ready for use in production. ***
+*** Eventify is still in early development, and is not yet ready for use in production! ***
 
 # Examples
 ### Events

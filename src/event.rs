@@ -16,7 +16,6 @@
 
 use std::cell::UnsafeCell;
 use std::sync::{Arc, Mutex, Weak};
-use crate::Leak;
 
 #[derive(Debug, Default)]
 struct EventInner<Args> {
@@ -34,7 +33,7 @@ struct EventInner<Args> {
 ///     let hook = event.hook(|args: &i32| {
 ///         println!("Event fired with args: {}", args);
 ///     });
-///     event.invoke(&42);
+///     event.emit(&42);
 /// }
 /// ```
 #[derive(Debug, Default)]
@@ -73,8 +72,8 @@ impl<Args> Event<Args> {
         }
     }
 
-    /// Invokes the event, calling all hooked callbacks.
-    pub fn invoke(&self, args: &Args) {
+    /// Emits the event, calling all hooked callbacks.
+    pub fn emit(&self, args: &Args) {
         let inner = self.inner.lock().unwrap();
         for callback in &inner.callbacks {
             unsafe {
@@ -111,12 +110,6 @@ impl<Args> Hook<Args> {
     /// Leaks the hook, preventing it from being dropped.
     /// This is useful if you want to keep the hook around till the event is dropped.
     pub fn leak(mut self) {
-        self.data.take();
-    }
-}
-
-impl<Args> Leak for Hook<Args> {
-    fn leak(mut self) {
         self.data.take();
     }
 }

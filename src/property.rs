@@ -15,6 +15,7 @@
 //
 
 use std::cell::UnsafeCell;
+use std::ops::{Deref, DerefMut};
 use std::sync::*;
 
 #[derive(Debug)]
@@ -131,8 +132,12 @@ pub struct PropertyReadGuard<'a, T> {
     inner: RwLockReadGuard<'a, PropertyData<T>>,
 }
 
-impl<'a, T> PropertyReadGuard<'a, T> {
-    pub fn get(&self) -> &T {
+impl<'a, T> PropertyReadGuard<'a, T> {}
+
+impl<'a, T> Deref for PropertyReadGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner.value
     }
 }
@@ -156,12 +161,18 @@ pub struct PropertyWriteGuard<'a, T> {
     inner: RwLockWriteGuard<'a, PropertyData<T>>,
 }
 
-impl<'a, T> PropertyWriteGuard<'a, T> {
-    pub fn get(&self) -> &T {
+impl<'a, T> PropertyWriteGuard<'a, T> {}
+
+impl<'a, T> Deref for PropertyWriteGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner.value
     }
+}
 
-    pub fn get_mut(&mut self) -> &mut T {
+impl<'a, T> DerefMut for PropertyWriteGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner.value
     }
 }
@@ -173,7 +184,7 @@ impl<T> Drop for PropertyWriteGuard<'_, T> {
 }
 
 fn box_callback<T>(f: impl FnMut(&T) + 'static) -> Arc<UnsafeCell<dyn FnMut(&T) -> ()>> {
-    unimplemented!()
+    Arc::new(UnsafeCell::new(f))
 }
 
 impl<T> Default for Property<T>
@@ -185,6 +196,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct BindingData<T> {
     property: Arc<RwLock<PropertyData<T>>>,
     callback: Arc<UnsafeCell<dyn FnMut(&T) -> ()>>,
@@ -206,18 +218,18 @@ pub struct ReadonlyBinding<T> {
 }
 
 impl<T> ReadonlyBinding<T> {
-    fn leak(mut self) {
+    pub fn leak(mut self) {
         self.inner.take();
     }
 
-    fn read(&self) -> LockResult<BindingReadGuard<'_, T>> {
+    pub fn read(&self) -> LockResult<BindingReadGuard<'_, T>> {
         map_lock_result(self.inner.as_ref().unwrap().property.read(), |inner| {
             BindingReadGuard::from(inner)
         })
     }
 }
 
-impl Drop for ReadonlyBinding<()> {
+impl<T> Drop for ReadonlyBinding<T> {
     fn drop(&mut self) {
         self.inner.as_ref().map(|data| {
             data.unbind();
@@ -232,24 +244,24 @@ pub struct ReadWriteBinding<T> {
 }
 
 impl<T> ReadWriteBinding<T> {
-    fn leak(mut self) {
+    pub fn leak(mut self) {
         self.inner.take();
     }
 
-    fn read(&self) -> LockResult<BindingReadGuard<'_, T>> {
+    pub fn read(&self) -> LockResult<BindingReadGuard<'_, T>> {
         map_lock_result(self.inner.as_ref().unwrap().property.read(), |inner| {
             BindingReadGuard::from(inner)
         })
     }
 
-    fn write(&self) -> LockResult<BindingWriteGuard<T>> {
+    pub fn write(&self) -> LockResult<BindingWriteGuard<T>> {
         map_lock_result(self.inner.as_ref().unwrap().property.write(), |inner| {
             BindingWriteGuard::new(inner, self.inner.as_ref().unwrap())
         })
     }
 }
 
-impl Drop for ReadWriteBinding<()> {
+impl<T> Drop for ReadWriteBinding<T> {
     fn drop(&mut self) {
         self.inner.as_ref().map(|data| {
             data.unbind();
@@ -264,8 +276,12 @@ pub struct BindingReadGuard<'a, T> {
     inner: RwLockReadGuard<'a, PropertyData<T>>,
 }
 
-impl<'a, T> BindingReadGuard<'a, T> {
-    pub fn get(&self) -> &T {
+impl<'a, T> BindingReadGuard<'a, T> {}
+
+impl<'a, T> Deref for BindingReadGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner.value
     }
 }
@@ -288,12 +304,18 @@ impl<'a, T> BindingWriteGuard<'a, T> {
     fn new(inner: RwLockWriteGuard<'a, PropertyData<T>>, data: &'a BindingData<T>) -> Self {
         Self { inner, data }
     }
+}
 
-    pub fn get(&self) -> &() {
+impl<'a, T> Deref for BindingWriteGuard<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner.value
     }
+}
 
-    pub fn get_mut(&mut self) -> &mut () {
+impl<'a, T> DerefMut for BindingWriteGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner.value
     }
 }

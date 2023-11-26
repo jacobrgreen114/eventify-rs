@@ -15,16 +15,30 @@
 //
 
 use std::cell::UnsafeCell;
-use std::env::Args;
 use std::sync::{Arc, Mutex, Weak};
+use crate::Leak;
 
 #[derive(Debug, Default)]
 struct EventInner<Args> {
-    handlers: Vec<Arc<UnsafeCell<dyn FnMut(&Args) -> ()>>>,
+    callbacks: Vec<Arc<UnsafeCell<dyn FnMut(&Args) -> ()>>>,
 }
 
+/// A thread-safe event that can be hooked into.
+///
+/// # Example
+/// ```rust
+/// use eventify::event::*;
+///
+/// fn main() {
+///     let event = Event::new();
+///     let hook = event.hook(|args: &i32| {
+///         println!("Event fired with args: {}", args);
+///     });
+///     event.invoke(&42);
+/// }
+/// ```
 #[derive(Debug, Default)]
-pub struct Event<Args> {
+pub struct Event<Args = ()> {
     inner: Arc<Mutex<EventInner<Args>>>,
 }
 
@@ -32,33 +46,39 @@ impl<Args> Event<Args> {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Mutex::new(EventInner {
-                handlers: Vec::new(),
+                callbacks: Vec::new(),
             })),
         }
     }
 
+    /// Hooks a callback into the event, returning a hook that can be used to remove the hook.
     #[must_use]
-    pub fn add_handler(&self, handler: impl FnMut(&Args) + 'static) -> EventHook<Args> {
+    #[inline(always)]
+    pub fn hook(&self, callback: impl FnMut(&Args) + 'static) -> Hook<Args> {
+        self.hook_internal(Arc::new(UnsafeCell::new(callback)))
+    }
+
+    fn hook_internal(&self, callback: Arc<UnsafeCell<dyn FnMut(&Args) -> ()>>) -> Hook<Args> {
         let mut inner = self.inner.lock().unwrap();
-        let handler = Arc::new(UnsafeCell::new(handler));
 
         let weak_inner = Arc::downgrade(&self.inner);
-        let weak_handler = Arc::downgrade(&handler);
+        let weak_callback = Arc::downgrade(&callback);
 
-        inner.handlers.push(handler);
-        EventHook {
+        inner.callbacks.push(callback);
+        Hook {
             data: Some(EventHookData {
                 inner: weak_inner,
-                handler: weak_handler,
+                callback: weak_callback,
             }),
         }
     }
 
+    /// Invokes the event, calling all hooked callbacks.
     pub fn invoke(&self, args: &Args) {
         let inner = self.inner.lock().unwrap();
-        for handler in &inner.handlers {
+        for callback in &inner.callbacks {
             unsafe {
-                (*handler.get())(args);
+                (*callback.get())(args);
             }
         }
     }
@@ -67,29 +87,54 @@ impl<Args> Event<Args> {
 #[derive(Debug)]
 struct EventHookData<Args> {
     inner: Weak<Mutex<EventInner<Args>>>,
-    handler: Weak<UnsafeCell<dyn FnMut(&Args)>>,
+    callback: Weak<UnsafeCell<dyn FnMut(&Args)>>,
 }
 
+/// A hook into an event.
+///
+/// Hooks can be dropped to remove it from the event or
+/// leaked to keep it alive till the event is dropped.
 #[derive(Debug)]
-pub struct EventHook<Args> {
+pub struct Hook<Args> {
     data: Option<EventHookData<Args>>,
 }
 
-impl<Args> EventHook<Args> {
+impl<Args> Hook<Args> {
+    /// Returns true if the event is still alive.
+    pub fn is_alive(&self) -> bool {
+        self.data
+            .as_ref()
+            .map(|data| data.inner.strong_count() > 0)
+            .unwrap_or(false)
+    }
+
+    /// Leaks the hook, preventing it from being dropped.
+    /// This is useful if you want to keep the hook around till the event is dropped.
     pub fn leak(mut self) {
         self.data.take();
     }
 }
 
-impl<Args> Drop for EventHook<Args> {
+impl<Args> Leak for Hook<Args> {
+    fn leak(mut self) {
+        self.data.take();
+    }
+}
+
+impl<Args> Drop for Hook<Args> {
     fn drop(&mut self) {
-        self.data.as_ref().map(|EventHookData { inner, handler }| {
-            inner.upgrade().map(|inner| {
-                let mut inner = inner.lock().unwrap();
-                handler.upgrade().map(|handler| {
-                    inner.handlers.retain(|h| !Arc::ptr_eq(h, &handler));
+        self.data.as_ref().map(
+            |EventHookData {
+                 inner,
+                 callback: handler,
+             }| {
+                inner.upgrade().map(|inner| {
+                    let mut inner = inner.lock().unwrap();
+                    handler.upgrade().map(|handler| {
+                        inner.callbacks.retain(|h| !Arc::ptr_eq(h, &handler));
+                    });
                 });
-            });
-        });
+            },
+        );
     }
 }

@@ -1,5 +1,7 @@
 # eventify
-eventify is a helper library for triggering events in your application.
+Eventify is a library to facilitate the creation of event-based design patterns in your applications.
+
+*** Eventify is still in early development, and is not yet ready for use in production. ***
 
 # Examples
 ### Events
@@ -7,11 +9,13 @@ eventify is a helper library for triggering events in your application.
 use eventify::event::*;
 
 fn main() {
-    let example_event = Event::new();
-    let event_hook = example_event.hook(move || {
-        println!("Hello World!");
+    let event = Event::new();
+    
+    let hook = event.hook(|_| {
+        println!("Event fired!");
     });
-    example_event.invoke(&());
+    
+    event.emit(&());
 }
 ```
 ### Properties
@@ -19,11 +23,12 @@ fn main() {
 use eventify::property::*;
 
 fn main() {
-    let example_property = Property::new(0);
-    let property_hook = example_property.hook(move |value| {
-        println!("Value: {}", value);
+    let property = Property::new("".to_string());
+
+    let binding = property.bind(|value| {
+        println!("Property changed to: {}", value);
     });
-    example_property.set(1);
+
+    *property.write().unwrap() = "Hello, world!".to_string();
 }
-```   
-}
+```
